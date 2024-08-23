@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mapa Interactivo con Rutas y Bluetooth</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 80vh; /* Ajustado para dejar espacio para el botón */
+            width: 100%;
+        }
+        #connect-button {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <button id="connect-button">SEARCH PVD</button>
+    <div id="map"></div>
+    
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        var map = L.map('map').setView([0, 0], 2);
+        var startMarker, endMarker;
+        var routingControl;
+
+        // Cargar las capas del mapa desde OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Intentar obtener la geolocalización del usuario
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(function(position) {
+                var lat = position.coords.latitude;
+                var lon = position.coords.longitude;
+                var userLocation = [lat, lon];
+                
+                // Centrar el mapa en la ubicación del usuario
+                map.setView(userLocation, 13);
+                
+                // Agregar un marcador en la ubicación del usuario
+                startMarker = L.marker(userLocation).addTo(map)
+                    .bindPopup('Tu ubicación')
+                    .openPopup();
+            });
+        } else {
+            alert("La geolocalización no está disponible en este navegador.");
+        }
+
+        // Función para agregar marcadores de inicio y destino
+        function onMapClick(e) {
+            if (!startMarker) {
+                startMarker = L.marker(e.latlng).addTo(map)
+                    .bindPopup('Inicio de la ruta')
+                    .openPopup();
+            } else if (!endMarker) {
+                endMarker = L.marker(e.latlng).addTo(map)
+                    .bindPopup('Destino de la ruta')
+                    .openPopup();
+                calculateRoute();
+            }
+        }
+
+        // Calcular la ruta entre inicio y destino usando OSRM
+        function calculateRoute() {
+            var startLatLng = startMarker.getLatLng();
+            var endLatLng = endMarker.getLatLng();
+
+            var url = `https://router.project-osrm.org/route/v1/driving/${startLatLng.lng},${startLatLng.lat};${endLatLng.lng},${endLatLng.lat}?overview=false&geometries=geojson`;
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    var coords = data.routes[0].geometry.coordinates;
+                    var latLngs = coords.map(coord => [coord[1], coord[0]]);
+                    L.polyline(latLngs, {color: 'blue'}).addTo(map);
+                });
+        }
+
+        // Vincular la función de clic con el mapa
+        map.on('click', onMapClick);
+
+        // Función para conectar con el ESP32 a través de Bluetooth
+        document.getElementById('connect-button').addEventListener('click', function() {
+            navigator.bluetooth.requestDevice({
+                filters: [{ services: ['battery_service'] }] // Cambia este filtro según el servicio del ESP32
+            })
+            .then(device => {
+                console.log('Conectado a:', device.name);
+                // Aquí puedes agregar más lógica para interactuar con el dispositivo
+            })
+            .catch(error => {
+                console.log('Error de conexión:', error);
+            });
+        });
+    </script>
+</body>
+</html>
